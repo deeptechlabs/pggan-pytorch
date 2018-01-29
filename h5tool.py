@@ -22,12 +22,14 @@ import h5py # conda install h5py
 #----------------------------------------------------------------------------
 
 class HDF5Exporter:
-    def __init__(self, h5_filename, resolution, channels=3):
+    def __init__(self, h5_filename, resolution, channels=3, export_captions=False):
         rlog2 = int(np.floor(np.log2(resolution)))
         assert resolution == 2 ** rlog2
         self.resolution = resolution
         self.channels = channels
+        self.export_captions = export_captions
         self.h5_file = h5py.File(h5_filename, 'w')
+
         self.h5_lods = []
         self.buffers = []
         self.buffer_sizes = []
@@ -41,6 +43,10 @@ class HDF5Exporter:
             self.h5_lods.append(lod)
             self.buffers.append(np.zeros((buffer_size,c,r,r), dtype=np.uint8))
             self.buffer_sizes.append(0)
+        if self.export_captions:
+            self.h5_caps = self.h5_file.create_dataset('captions', shape=(0,5,1024), dtype=np.float32,
+                                                       maxshape=(None,5,1024),
+                                                       compression='gzip', compression_opts=4)
 
     def close(self):
         for lod in xrange(len(self.h5_lods)):
@@ -63,6 +69,12 @@ class HDF5Exporter:
                 if self.buffer_sizes[lod] == self.buffers[lod].shape[0]:
                     self.flush_lod(lod)
                 ofs += num
+
+    def add_embeddings(self, embedding):
+        assert self.export_captions
+        row_count = self.h5_caps.shape[0]
+        self.h5_caps.resize(row_count + embedding.shape[0], axis=0)
+        self.h5_caps[row_count:] = embedding
 
     def num_images(self):
         return self.h5_lods[0].shape[0] + self.buffer_sizes[0]
@@ -619,13 +631,19 @@ def create_celeba_hq(h5_filename, celeba_dir, delta_dir, num_threads=4, num_task
 
 def create_coco(h5_filename, data_dir, resolution=256, export_captions=False):
     print 'Creating COCO 2014 dataset %s from %s' % (h5_filename, data_dir)
-    h5 = HDF5Exporter(h5_filename, resolution, 3)
+    h5 = HDF5Exporter(h5_filename, resolution, 3, export_captions=export_captions)
     import cPickle
     import cv2
+
+    if export_captions:
+        with open(os.path.join(data_dir, 'train/char-CNN-RNN-embeddings.pickle'), 'rb') as f:
+            embeddings = cPickle.load(f)
     with open(os.path.join(data_dir, 'train/filenames.pickle'), 'rb') as f:
         filenames = cPickle.load(f)
         total_images = len(filenames)
         max_images = total_images
+        if export_captions:
+            assert total_images == len(embeddings)
         for idx, prefix in enumerate(filenames):
             filename = prefix + '.jpg'
             print '%d / %d\r' % (h5.num_images(), min(h5.num_images() + total_images - idx, max_images)),
@@ -638,7 +656,8 @@ def create_coco(h5_filename, data_dir, resolution=256, export_captions=False):
             img = np.asarray(img)
             img = img.transpose(2, 0, 1) # HWC => CHW
             h5.add_images(img[np.newaxis])
-            #h5.add_embeddings()
+            if export_captions:
+                h5.add_embeddings(embeddings[idx][np.newaxis])
             if h5.num_images() == max_images:
                 break
     print '%-40s\r' % 'Flushing data...',
@@ -732,7 +751,7 @@ def execute_cmdline(argv):
     p.add_argument(     '--num_tasks',      help='Number of concurrent processing tasks (default: 100)', type=int, default=100)
 
     p = add_command(    'create_coco',      'Create HDF5 dataset for COCO training set.',
-                                            'create_coco coco-256x256.h5 ~/coco/ --resolution 256')
+                                            'create_coco coco-256x256.h5 ~/coco/ --resolution 256 --export_captions True')
     p.add_argument(     'h5_filename',      help='HDF5 file to create')
     p.add_argument(     'data_dir',         help='Directory to read data from')
     p.add_argument(     '--resolution',     help='Output resolution (default: 256)', type=int, default=256)

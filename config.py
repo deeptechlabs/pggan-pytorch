@@ -6,7 +6,7 @@ import time
 parser = argparse.ArgumentParser('PGGAN')
 
 ## general settings.
-parser.add_argument('--train_data_root', type=str, default='/home/shsh/pggan-pytorch/data/coco/')
+parser.add_argument('--train_data_h5', type=str, default='/home/shsh/pggan-pytorch/data/coco/coco-train-images-captions.h5')
 parser.add_argument('--random_seed', type=int, default=int(time.time()))
 parser.add_argument('--n_gpu', type=int, default=1)             # for Multi-GPU training.
 

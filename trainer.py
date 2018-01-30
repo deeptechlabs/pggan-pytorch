@@ -164,7 +164,7 @@ class trainer:
             
     def renew_everything(self):
         # renew dataloader.
-        self.loader = DL.dataloader(config)
+        self.loader = DL.hdf5_dataloader(config)
         self.loader.renew(min(floor(self.resl), self.max_resl))
         
         # define tensors

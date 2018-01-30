@@ -7,12 +7,12 @@ parser = argparse.ArgumentParser('PGGAN')
 
 ## general settings.
 parser.add_argument('--train_data_h5', type=str, default='/home/shsh/pggan-pytorch/data/coco/coco-train-images-captions.h5')
-parser.add_argument('--use_captions', type=bool, default=False)
 parser.add_argument('--random_seed', type=int, default=int(time.time()))
 parser.add_argument('--n_gpu', type=int, default=1)             # for Multi-GPU training.
 
-
-
+## caption parameters.
+parser.add_argument('--use_captions', type=bool, default=False)
+parser.add_argument('--ncap', type=int, default=1024)           # input dimension of captions.
 
 
 

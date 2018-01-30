@@ -48,11 +48,10 @@ class trainer:
         self.flag_add_drift = self.config.flag_add_drift
         self.use_captions = config.use_captions
         if self.use_captions:
-            # TODO dimension of caption related stuff
-            pass
+            self.ncap = config.ncap
         
         # network and cirterion
-        self.G = net.Generator(config)  # TODO pass captions
+        self.G = net.Generator(config, use_captions=self.use_captions)
         self.D = net.Discriminator(config)  # TODO pass captions
         print ('Generator structure: ')
         print(self.G.model)
@@ -60,7 +59,7 @@ class trainer:
         print(self.D.model)
         self.mse = torch.nn.MSELoss()
         if self.use_cuda:
-            self.mse = self.mse.cuda()  # TODO check if there is wgan-gp later on
+            self.mse = self.mse.cuda()
             torch.cuda.manual_seed(config.random_seed)
             if config.n_gpu==1:
                 self.G = torch.nn.DataParallel(self.G).cuda(device=0)
@@ -173,7 +172,8 @@ class trainer:
         
         # define tensors
         self.z = torch.FloatTensor(self.loader.batchsize, self.nz)
-        # TODO if self.use_captions then create caption input
+        if self.use_captions:
+            self.caps = torch.FloatTensor(self.loader.batchsize, self.ncap)
         self.x = torch.FloatTensor(self.loader.batchsize, 3, self.loader.imsize, self.loader.imsize)
         self.x_tilde = torch.FloatTensor(self.loader.batchsize, 3, self.loader.imsize, self.loader.imsize)
         self.real_label = torch.FloatTensor(self.loader.batchsize).fill_(1)
@@ -182,7 +182,8 @@ class trainer:
         # enable cuda
         if self.use_cuda:
             self.z = self.z.cuda()
-            # TODO if self.use_captions then create caption input cuda
+            if self.use_captions:
+                self.caps = self.caps.cuda()
             self.x = self.x.cuda()
             self.x_tilde = self.x.cuda()
             self.real_label = self.real_label.cuda()
@@ -193,7 +194,8 @@ class trainer:
         self.x = Variable(self.x)
         self.x_tilde = Variable(self.x_tilde)
         self.z = Variable(self.z)
-        # TODO if self.use_captions then create caption input cuda
+        if self.use_captions:
+            self.caps = Variable(self.caps)
         self.real_label = Variable(self.real_label)
         self.fake_label = Variable(self.fake_label)
         
@@ -230,7 +232,7 @@ class trainer:
 
 
     def add_noise(self, x):
-        # TODO: support more method of adding noise.
+        # TODO support more method of adding noise.
         if self.flag_add_noise==False:
             return x
 
@@ -241,17 +243,21 @@ class trainer:
         strength = 0.2 * max(0, self._d_ - 0.5)**2
         z = np.random.randn(*x.size()).astype(np.float32) * strength
         z = Variable(torch.from_numpy(z)).cuda() if self.use_cuda else Variable(torch.from_numpy(z))
-        # TODO check if there is anything to be done here
         return x + z
 
 
-    def train(self):  # TODO entire function
+    def train(self):
         # noise for test.
         self.z_test = torch.FloatTensor(self.loader.batchsize, self.nz)
         if self.use_cuda:
             self.z_test = self.z_test.cuda()
         self.z_test = Variable(self.z_test, volatile=True)
         self.z_test.data.resize_(self.loader.batchsize, self.nz).normal_(0.0, 1.0)
+        if self.use_captions:
+            self.caps_test = torch.FloatTensor(self.loader.batchsize, self.ncap)
+            if self.use_cuda:
+                self.caps_test = self.caps_test.cuda()
+            self.caps_test = Variable(self.caps_test, volatile=True)
         
         
         for step in range(2, self.max_resl+1+5):
@@ -269,26 +275,34 @@ class trainer:
                 self.G.zero_grad()
                 self.D.zero_grad()
 
+                # TODO implement WGAN-GP
                 # update discriminator.
                 if self.use_captions:
                     batch_imgs, batch_caps = self.loader.get_batch()
+                    if self.use_cuda:
+                        batch_caps = batch_caps.cuda()
+                    self.caps.data = batch_caps
+                    self.caps_test.data = batch_caps
                 else:
                     batch_imgs, _ = self.loader.get_batch()
                 self.x.data = self.feed_interpolated_input(batch_imgs)
                 if self.flag_add_noise:
                     self.x = self.add_noise(self.x)
                 self.z.data.resize_(self.loader.batchsize, self.nz).normal_(0.0, 1.0)
-                self.x_tilde = self.G(self.z)
+                if not self.use_captions:
+                    self.x_tilde = self.G(self.z)
+                else:
+                    self.x_tilde = self.G(self.z, self.caps)
                
-                self.fx = self.D(self.x)
-                self.fx_tilde = self.D(self.x_tilde.detach())
+                self.fx = self.D(self.x)  # TODO add caption
+                self.fx_tilde = self.D(self.x_tilde.detach())  # TODO add caption
                 loss_d = self.mse(self.fx, self.real_label) + self.mse(self.fx_tilde, self.fake_label)
 
                 loss_d.backward()
                 self.opt_d.step()
 
                 # update generator.
-                fx_tilde = self.D(self.x_tilde)
+                fx_tilde = self.D(self.x_tilde)  # TODO add caption
                 loss_g = self.mse(fx_tilde, self.real_label.detach())
                 loss_g.backward()
                 self.opt_g.step()
@@ -302,7 +316,10 @@ class trainer:
 
                 # save image grid.
                 if self.globalIter%self.config.save_img_every == 0:
-                    x_test = self.G(self.z_test)
+                    if not self.use_captions:
+                        x_test = self.G(self.z_test)
+                    else:
+                        x_test = self.G(self.z_test, self.caps_test)
                     os.system('mkdir -p repo/save/grid')
                     utils.save_image_grid(x_test.data, 'repo/save/grid/{}_{}_G{}_D{}.jpg'.format(int(self.globalIter/self.config.save_img_every), self.phase, self.complete['gen'], self.complete['dis']))
                     os.system('mkdir -p repo/save/resl_{}'.format(int(floor(self.resl))))
@@ -311,7 +328,10 @@ class trainer:
 
                 # tensorboard visualization.
                 if self.use_tb:
-                    x_test = self.G(self.z_test)
+                    if not self.use_captions:
+                        x_test = self.G(self.z_test)
+                    else:
+                        x_test = self.G(self.z_test, self.caps_test)
                     self.tb.add_scalar('data/loss_g', loss_g.data[0], self.globalIter)
                     self.tb.add_scalar('data/loss_d', loss_d.data[0], self.globalIter)
                     self.tb.add_scalar('tick/lr', self.lr, self.globalIter)

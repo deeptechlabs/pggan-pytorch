@@ -62,7 +62,7 @@ def get_module_names(model):
 
 
 class Generator(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config, use_captions=False):
         super(Generator, self).__init__()
         self.config = config
         self.flag_bn = config.flag_bn
@@ -74,6 +74,9 @@ class Generator(nn.Module):
         self.nc = config.nc
         self.nz = config.nz
         self.ngf = config.ngf
+        self.use_captions = use_captions
+        if self.use_captions:
+            self.ncap = config.ncap
         self.layer_name = None
         self.module_names = []
         self.model = self.get_init_gen()
@@ -83,7 +86,10 @@ class Generator(nn.Module):
         ndim = self.ngf
         if self.flag_norm_latent:
             layers.append(pixelwise_norm_layer())
-        layers = deconv(layers, self.nz, ndim, 4, 1, 3, self.flag_leaky, self.flag_bn, self.flag_wn, self.flag_pixelwise)
+        if not self.use_captions:
+            layers = deconv(layers, self.nz, ndim, 4, 1, 3, self.flag_leaky, self.flag_bn, self.flag_wn, self.flag_pixelwise)
+        else:
+            layers = deconv(layers, self.nz + self.ncap, ndim, 4, 1, 3, self.flag_leaky, self.flag_bn, self.flag_wn, self.flag_pixelwise)
         layers = deconv(layers, ndim, ndim, 3, 1, 1, self.flag_leaky, self.flag_bn, self.flag_wn, self.flag_pixelwise)
         return  nn.Sequential(*layers), ndim
 
@@ -180,7 +186,9 @@ class Generator(nn.Module):
             param.requires_grad = False
 
     
-    def forward(self, x):
+    def forward(self, x, captions=None):
+        if self.use_captions:
+            x = torch.cat((x, captions), -1)
         x = self.model(x.view(x.size(0), -1, 1, 1))
         return x
 

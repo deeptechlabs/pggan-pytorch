@@ -8,6 +8,7 @@ import torchvision.transforms as transforms
 from torch.utils.data import DataLoader, Dataset
 from torchvision.datasets import ImageFolder
 from torch.autograd import Variable
+import matplotlib; matplotlib.use('agg')  # to avoid errors when display is not present
 from matplotlib import pyplot as plt
 from PIL import Image
 import h5py

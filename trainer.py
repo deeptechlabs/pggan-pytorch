@@ -46,17 +46,21 @@ class trainer:
         self.flag_flush_dis = False
         self.flag_add_noise = self.config.flag_add_noise
         self.flag_add_drift = self.config.flag_add_drift
+        self.use_captions = config.use_captions
+        if self.use_captions:
+            # TODO dimension of caption related stuff
+            pass
         
         # network and cirterion
-        self.G = net.Generator(config)
-        self.D = net.Discriminator(config)
+        self.G = net.Generator(config)  # TODO pass captions
+        self.D = net.Discriminator(config)  # TODO pass captions
         print ('Generator structure: ')
         print(self.G.model)
         print ('Discriminator structure: ')
         print(self.D.model)
         self.mse = torch.nn.MSELoss()
         if self.use_cuda:
-            self.mse = self.mse.cuda()
+            self.mse = self.mse.cuda()  # TODO check if there is wgan-gp later on
             torch.cuda.manual_seed(config.random_seed)
             if config.n_gpu==1:
                 self.G = torch.nn.DataParallel(self.G).cuda(device=0)
@@ -169,6 +173,7 @@ class trainer:
         
         # define tensors
         self.z = torch.FloatTensor(self.loader.batchsize, self.nz)
+        # TODO if self.use_captions then create caption input
         self.x = torch.FloatTensor(self.loader.batchsize, 3, self.loader.imsize, self.loader.imsize)
         self.x_tilde = torch.FloatTensor(self.loader.batchsize, 3, self.loader.imsize, self.loader.imsize)
         self.real_label = torch.FloatTensor(self.loader.batchsize).fill_(1)
@@ -177,6 +182,7 @@ class trainer:
         # enable cuda
         if self.use_cuda:
             self.z = self.z.cuda()
+            # TODO if self.use_captions then create caption input cuda
             self.x = self.x.cuda()
             self.x_tilde = self.x.cuda()
             self.real_label = self.real_label.cuda()
@@ -187,6 +193,7 @@ class trainer:
         self.x = Variable(self.x)
         self.x_tilde = Variable(self.x_tilde)
         self.z = Variable(self.z)
+        # TODO if self.use_captions then create caption input cuda
         self.real_label = Variable(self.real_label)
         self.fake_label = Variable(self.fake_label)
         
@@ -234,10 +241,11 @@ class trainer:
         strength = 0.2 * max(0, self._d_ - 0.5)**2
         z = np.random.randn(*x.size()).astype(np.float32) * strength
         z = Variable(torch.from_numpy(z)).cuda() if self.use_cuda else Variable(torch.from_numpy(z))
+        # TODO check if there is anything to be done here
         return x + z
 
 
-    def train(self):
+    def train(self):  # TODO entire function
         # noise for test.
         self.z_test = torch.FloatTensor(self.loader.batchsize, self.nz)
         if self.use_cuda:
@@ -262,7 +270,11 @@ class trainer:
                 self.D.zero_grad()
 
                 # update discriminator.
-                self.x.data = self.feed_interpolated_input(self.loader.get_batch())
+                if self.use_captions:
+                    batch_imgs, batch_caps = self.loader.get_batch()
+                else:
+                    batch_imgs, _ = self.loader.get_batch()
+                self.x.data = self.feed_interpolated_input(batch_imgs)
                 if self.flag_add_noise:
                     self.x = self.add_noise(self.x)
                 self.z.data.resize_(self.loader.batchsize, self.nz).normal_(0.0, 1.0)

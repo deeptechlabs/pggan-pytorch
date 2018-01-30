@@ -52,7 +52,7 @@ class trainer:
         
         # network and cirterion
         self.G = net.Generator(config, use_captions=self.use_captions)
-        self.D = net.Discriminator(config)  # TODO pass captions
+        self.D = net.Discriminator(config, use_captions=self.use_captions)
         print ('Generator structure: ')
         print(self.G.model)
         print ('Discriminator structure: ')
@@ -294,15 +294,22 @@ class trainer:
                 else:
                     self.x_tilde = self.G(self.z, self.caps)
                
-                self.fx = self.D(self.x)  # TODO add caption
-                self.fx_tilde = self.D(self.x_tilde.detach())  # TODO add caption
+                if not self.use_captions:
+                    self.fx = self.D(self.x)
+                    self.fx_tilde = self.D(self.x_tilde.detach())
+                else:
+                    self.fx = self.D(self.x, self.caps)
+                    self.fx_tilde = self.D(self.x_tilde.detach(), self.caps)
                 loss_d = self.mse(self.fx, self.real_label) + self.mse(self.fx_tilde, self.fake_label)
 
                 loss_d.backward()
                 self.opt_d.step()
 
                 # update generator.
-                fx_tilde = self.D(self.x_tilde)  # TODO add caption
+                if not self.use_captions:
+                    fx_tilde = self.D(self.x_tilde)
+                else:
+                    fx_tilde = self.D(self.x_tilde, self.caps)
                 loss_g = self.mse(fx_tilde, self.real_label.detach())
                 loss_g.backward()
                 self.opt_g.step()

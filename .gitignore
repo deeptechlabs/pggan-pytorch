@@ -6,6 +6,11 @@
 *.json
 *.t7
 *.npy
+data/coco/
+data/visdial/
+data/lsun/
+data/celeba/
+data/celeba-hq-deltas/
 
 
 # zip files.

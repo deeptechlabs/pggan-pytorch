@@ -65,10 +65,11 @@ def get_module_names(model):
 class CA_NET(nn.Module):
     # some code is modified from vae examples
     # (https://github.com/pytorch/examples/blob/master/vae/main.py)
-    def __init__(self, cfg):
+    def __init__(self, config):
         super(CA_NET, self).__init__()
-        self.t_dim = cfg.TEXT.DIMENSION
-        self.c_dim = cfg.GAN.CONDITION_DIM
+        self.config = config
+        self.t_dim = self.config.ncap
+        self.c_dim = self.config.condition_dim
         self.fc = nn.Linear(self.t_dim, self.c_dim * 2, bias=True)
         self.relu = nn.ReLU()
 
@@ -80,7 +81,7 @@ class CA_NET(nn.Module):
 
     def reparametrize(self, mu, logvar):
         std = logvar.mul(0.5).exp_()
-        if cfg.CUDA:
+        if self.config.CUDA:
             eps = torch.cuda.FloatTensor(std.size()).normal_()
         else:
             eps = torch.FloatTensor(std.size()).normal_()
@@ -107,9 +108,7 @@ class Generator(nn.Module):
         self.ngf = config.ngf
         self.use_captions = use_captions
         if self.use_captions:
-            self.ncap = config.ncap
-            # TEXT.DIMENSION -> GAN.CONDITION_DIM
-            self.ca_net = CA_NET(self.ncap)
+            self.ca_net = CA_NET(self.config)
 
         self.layer_name = None
         self.module_names = []

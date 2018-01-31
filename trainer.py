@@ -297,14 +297,14 @@ class trainer:
                 if not self.use_captions:
                     self.x_tilde = self.G(self.z)
                 else:
-                    self.x_tilde = self.G(self.z, self.caps)  # TODO return ca too
+                    self.x_tilde, ca_emb = self.G(self.z, self.caps)
                
                 if not self.use_captions:
                     self.fx = self.D(self.x)
                     self.fx_tilde = self.D(self.x_tilde.detach())
                 else:
-                    self.fx = self.D(self.x, self.caps)  # TODO ca.data instead of caps
-                    self.fx_tilde = self.D(self.x_tilde.detach(), self.caps)  # TODO ca.data instead of caps
+                    self.fx = self.D(self.x, ca_emb.detach())
+                    self.fx_tilde = self.D(self.x_tilde.detach(), ca_emb.detach())
                 loss_d = self.mse(self.fx, self.real_label) + self.mse(self.fx_tilde, self.fake_label)
 
                 loss_d.backward()
@@ -314,7 +314,7 @@ class trainer:
                 if not self.use_captions:
                     fx_tilde = self.D(self.x_tilde)
                 else:
-                    fx_tilde = self.D(self.x_tilde, self.caps)  # TODO ca(?) instead of caps
+                    fx_tilde = self.D(self.x_tilde, ca_emb.detach())
                 loss_g = self.mse(fx_tilde, self.real_label.detach())
                 loss_g.backward()
                 self.opt_g.step()
@@ -331,7 +331,7 @@ class trainer:
                     if not self.use_captions:
                         x_test = self.G(self.z_test)
                     else:
-                        x_test = self.G(self.z_test, self.caps_test)  # TODO ignore returned ca
+                        x_test, _ = self.G(self.z_test, self.caps_test)
                     os.system('mkdir -p repo/save/grid')
                     utils.save_image_grid(x_test.data, 'repo/save/grid/{}_{}_G{}_D{}.jpg'.format(int(self.globalIter/self.config.save_img_every), self.phase, self.complete['gen'], self.complete['dis']))
                     os.system('mkdir -p repo/save/resl_{}'.format(int(floor(self.resl))))
@@ -343,7 +343,7 @@ class trainer:
                     if not self.use_captions:
                         x_test = self.G(self.z_test)
                     else:
-                        x_test = self.G(self.z_test, self.caps_test)  # TODO ignore returned ca
+                        x_test, _ = self.G(self.z_test, self.caps_test)
                     self.tb.add_scalar('data/loss_g', loss_g.data[0], self.globalIter)
                     self.tb.add_scalar('data/loss_d', loss_d.data[0], self.globalIter)
                     self.tb.add_scalar('tick/lr', self.lr, self.globalIter)

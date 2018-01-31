@@ -65,10 +65,10 @@ def get_module_names(model):
 class CA_NET(nn.Module):
     # some code is modified from vae examples
     # (https://github.com/pytorch/examples/blob/master/vae/main.py)
-    def __init__(self):
+    def __init__(self, cfg):
         super(CA_NET, self).__init__()
-        self.t_dim = 1024 #cfg.TEXT.DIMENSION
-        self.c_dim = 128 # cfg.GAN.CONDITION_DIM
+        self.t_dim = cfg.TEXT.DIMENSION
+        self.c_dim = cfg.GAN.CONDITION_DIM
         self.fc = nn.Linear(self.t_dim, self.c_dim * 2, bias=True)
         self.relu = nn.ReLU()
 
@@ -109,7 +109,7 @@ class Generator(nn.Module):
         if self.use_captions:
             self.ncap = config.ncap
             # TEXT.DIMENSION -> GAN.CONDITION_DIM
-            self.ca_net = CA_NET()
+            self.ca_net = CA_NET(self.ncap)
 
         self.layer_name = None
         self.module_names = []
@@ -221,7 +221,6 @@ class Generator(nn.Module):
     def forward(self, x, captions=None):
         if self.use_captions:
             c_code, mu, logvar = self.ca_net(captions)
-            #x = torch.cat((x, captions), -1)
             x = torch.cat((x, c_code), -1)
         x = self.model(x.view(x.size(0), -1, 1, 1))
         return x

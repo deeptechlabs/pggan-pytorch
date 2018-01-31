@@ -2,9 +2,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+import copy
+
 from torch.autograd import Variable
 from custom_layers import *
-import copy
 
 
 # defined for code simplicity.
@@ -61,6 +62,43 @@ def get_module_names(model):
     return names
 
 
+class CA_NET(nn.Module):
+    # some code is modified from vae examples
+    # (https://github.com/pytorch/examples/blob/master/vae/main.py)
+    def __init__(self, ncap, condition_dim):
+        super(CA_NET, self).__init__()
+        self.t_dim = ncap
+        self.c_dim = condition_dim
+        self.fc = nn.Linear(self.t_dim, self.c_dim * 2, bias=True)
+        self.relu = nn.ReLU()
+        if torch.cuda.is_available():
+            self.use_cuda = True
+            torch.set_default_tensor_type('torch.cuda.FloatTensor')
+        else:
+            self.use_cuda = False
+            torch.set_default_tensor_type('torch.FloatTensor')
+
+    def encode(self, text_embedding):
+        x = self.relu(self.fc(text_embedding))
+        mu = x[:, :self.c_dim]
+        logvar = x[:, self.c_dim:]
+        return mu, logvar
+
+    def reparametrize(self, mu, logvar):
+        std = logvar.mul(0.5).exp_()
+        if self.use_cuda:
+            eps = torch.cuda.FloatTensor(std.size()).normal_()
+        else:
+            eps = torch.FloatTensor(std.size()).normal_()
+        eps = Variable(eps)
+        return eps.mul(std).add_(mu)
+
+    def forward(self, text_embedding):
+        mu, logvar = self.encode(text_embedding)
+        c_code = self.reparametrize(mu, logvar)
+        return c_code, mu, logvar
+
+
 class Generator(nn.Module):
     def __init__(self, config, use_captions=False):
         super(Generator, self).__init__()
@@ -76,7 +114,10 @@ class Generator(nn.Module):
         self.ngf = config.ngf
         self.use_captions = use_captions
         if self.use_captions:
-            self.ncap = config.ncap
+            self.ncap = self.config.ncap
+            self.condition_dim = self.config.condition_dim
+            self.ca_net = CA_NET(self.ncap, self.condition_dim)
+
         self.layer_name = None
         self.module_names = []
         self.model = self.get_init_gen()
@@ -89,7 +130,7 @@ class Generator(nn.Module):
         if not self.use_captions:
             layers = deconv(layers, self.nz, ndim, 4, 1, 3, self.flag_leaky, self.flag_bn, self.flag_wn, self.flag_pixelwise)
         else:
-            layers = deconv(layers, self.nz + self.ncap, ndim, 4, 1, 3, self.flag_leaky, self.flag_bn, self.flag_wn, self.flag_pixelwise)
+            layers = deconv(layers, self.nz + self.condition_dim, ndim, 4, 1, 3, self.flag_leaky, self.flag_bn, self.flag_wn, self.flag_pixelwise)
         layers = deconv(layers, ndim, ndim, 3, 1, 1, self.flag_leaky, self.flag_bn, self.flag_wn, self.flag_pixelwise)
         return  nn.Sequential(*layers), ndim
 
@@ -138,7 +179,7 @@ class Generator(nn.Module):
                 new_model[-1].load_state_dict(module.state_dict())      # copy pretrained weights
             
         if resl >= 3 and resl <= 9:
-            print 'growing network[{}x{} to {}x{}]. It may take few seconds...'.format(int(pow(2,resl-1)), int(pow(2,resl-1)), int(pow(2,resl)), int(pow(2,resl)))
+            print('growing network[{}x{} to {}x{}]. It may take few seconds...'.format(int(pow(2,resl-1)), int(pow(2,resl-1)), int(pow(2,resl)), int(pow(2,resl))))
             low_resl_to_rgb = deepcopy_module(self.model, 'to_rgb_block')
             prev_block = nn.Sequential()
             prev_block.add_module('low_resl_upsample', nn.Upsample(scale_factor=2, mode='nearest'))
@@ -184,16 +225,12 @@ class Generator(nn.Module):
         print('freeze pretrained weights ... ')
         for param in self.model.parameters():
             param.requires_grad = False
-
-    
     def forward(self, x, captions=None):
         if self.use_captions:
-            x = torch.cat((x, captions), -1)
+            c_code, mu, logvar = self.ca_net(captions)
+            x = torch.cat((x, c_code), -1)
         x = self.model(x.view(x.size(0), -1, 1, 1))
         return x
-
-
-        
 
 class Discriminator(nn.Module):
     def __init__(self, config, use_captions=False):
@@ -280,9 +317,8 @@ class Discriminator(nn.Module):
     
 
     def grow_network(self, resl):
-            
         if resl >= 3 and resl <= 9:
-            print 'growing network[{}x{} to {}x{}]. It may take few seconds...'.format(int(pow(2,resl-1)), int(pow(2,resl-1)), int(pow(2,resl)), int(pow(2,resl)))
+            print('growing network[{}x{} to {}x{}]. It may take few seconds...'.format(int(pow(2,resl-1)), int(pow(2,resl-1)), int(pow(2,resl)), int(pow(2,resl))))
             low_resl_from_rgb = deepcopy_module(self.model, 'from_rgb_block')
             prev_block = nn.Sequential()
             prev_block.add_module('low_resl_downsample', nn.AvgPool2d(kernel_size=2))
@@ -324,7 +360,6 @@ class Discriminator(nn.Module):
                 if name!='concat_block' and name!='fadein_block':
                     new_model.add_module(name, module)                      # make new structure and,
                     new_model[-1].load_state_dict(module.state_dict())      # copy pretrained weights
-
             self.model = new_model
             self.module_names = get_module_names(self.model)
         except:
@@ -348,13 +383,3 @@ class Discriminator(nn.Module):
             x = torch.cat((x, caps), dim=1)
             x = self.model_after_caps(x)
         return x
-
- 
-
-
-
-
-
-
-
-

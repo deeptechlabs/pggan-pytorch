@@ -386,7 +386,7 @@ class trainer:
 ## perform training.
 print('----------------- configuration -----------------')
 for k, v in vars(config).items():
-    print('  {}: {}').format(k, v)
+    print('  {}: {}'.format(k, v))
 print('-------------------------------------------------')
 torch.backends.cudnn.benchmark = True           # boost speed.
 trainer = trainer(config)

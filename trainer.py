@@ -232,7 +232,7 @@ class trainer:
 
 
     def add_noise(self, x):
-        # TODO support more method of adding noise.
+        # TODO support more methods of adding noise.
         if self.flag_add_noise==False:
             return x
 

@@ -196,7 +196,7 @@ class Generator(nn.Module):
         
 
 class Discriminator(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config, use_captions=False):
         super(Discriminator, self).__init__()
         self.config = config
         self.flag_bn = config.flag_bn
@@ -207,9 +207,15 @@ class Discriminator(nn.Module):
         self.nz = config.nz
         self.nc = config.nc
         self.ndf = config.ndf
+        self.use_captions = use_captions
+        if self.use_captions:
+            self.ncap = config.ncap
         self.layer_name = None
         self.module_names = []
-        self.model = self.get_init_dis()
+        if not self.use_captions:
+            self.model = self.get_init_dis()
+        else:
+            self.model, self.model_after_caps = self.get_init_dis()
 
     def last_block(self):
         # add minibatch_std_concat_layer later.
@@ -217,9 +223,15 @@ class Discriminator(nn.Module):
         layers = []
         layers.append(minibatch_std_concat_layer())
         layers = conv(layers, ndim+1, ndim, 3, 1, 1, self.flag_leaky, self.flag_bn, self.flag_wn, pixel=False)
-        layers = conv(layers, ndim, ndim, 4, 1, 0, self.flag_leaky, self.flag_bn, self.flag_wn, pixel=False)
+        if not self.use_captions:
+            layers = conv(layers, ndim, ndim, 4, 1, 0, self.flag_leaky, self.flag_bn, self.flag_wn, pixel=False)
+        else:
+            layers = conv(layers, ndim + self.ncap, ndim, 4, 1, 0, self.flag_leaky, self.flag_bn, self.flag_wn, pixel=False)
         layers = linear(layers, ndim, 1, sig=self.flag_sigmoid, wn=self.flag_wn)
-        return  nn.Sequential(*layers), ndim
+        if not self.use_captions:
+            return nn.Sequential(*layers), ndim
+        else:
+            return nn.Sequential(*layers[:5]), nn.Sequential(*layers[5:]), ndim
     
     def intermediate_block(self, resl):
         halving = False
@@ -249,12 +261,22 @@ class Discriminator(nn.Module):
         return  nn.Sequential(*layers)
     
     def get_init_dis(self):
-        model = nn.Sequential()
-        last_block, ndim = self.last_block()
-        model.add_module('from_rgb_block', self.from_rgb_block(ndim))
-        model.add_module('last_block', last_block)
-        self.module_names = get_module_names(model)
-        return model
+        if not self.use_captions:
+            model = nn.Sequential()
+            last_block, ndim = self.last_block()
+            model.add_module('from_rgb_block', self.from_rgb_block(ndim))
+            model.add_module('last_block', last_block)
+            self.module_names = get_module_names(model)
+            return model
+        else:
+            model_before_caps = nn.Sequential()
+            model_after_caps = nn.Sequential()
+            last_block_before_caps, last_block_after_caps, ndim = self.last_block()
+            model_before_caps.add_module('from_rgb_block', self.from_rgb_block(ndim))
+            model_before_caps.add_module('last_block_before_caps', last_block_before_caps)
+            model_after_caps.add_module('last_block_after_caps', last_block_after_caps)
+            self.module_names = get_module_names(model_before_caps)
+            return model_before_caps, model_after_caps
     
 
     def grow_network(self, resl):
@@ -313,9 +335,18 @@ class Discriminator(nn.Module):
         print('freeze pretrained weights ... ')
         for param in self.model.parameters():
             param.requires_grad = False
+        if self.use_captions:
+            for param in self.model_after_caps.parameters():
+                param.requires_grad = False
 
-    def forward(self, x):
-        x = self.model(x)
+    def forward(self, x, caps=None):
+        if not self.use_captions:
+            x = self.model(x)
+        else:
+            x = self.model(x)
+            caps = caps.unsqueeze(2).unsqueeze(3).repeat(1,1,4,4)
+            x = torch.cat((x, caps), dim=1)
+            x = self.model_after_caps(x)
         return x
 
  

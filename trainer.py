@@ -256,6 +256,7 @@ class trainer:
         self.z_test = Variable(self.z_test, volatile=True)
         self.z_test.data.resize_(self.loader.batchsize, self.nz).normal_(0.0, 1.0)
         if self.use_captions:
+            test_caps_set = False
             self.caps_test = torch.FloatTensor(self.loader.batchsize, self.ncap)
             if self.use_cuda:
                 self.caps_test = self.caps_test.cuda()
@@ -284,7 +285,9 @@ class trainer:
                     if self.use_cuda:
                         batch_caps = batch_caps.cuda()
                     self.caps.data = batch_caps
-                    self.caps_test.data = batch_caps
+                    if not test_caps_set:
+                        self.caps_test.data = batch_caps
+                        test_caps_set = True
                 else:
                     batch_imgs, _ = self.loader.get_batch()
                 self.x.data = self.feed_interpolated_input(batch_imgs)

@@ -65,13 +65,18 @@ def get_module_names(model):
 class CA_NET(nn.Module):
     # some code is modified from vae examples
     # (https://github.com/pytorch/examples/blob/master/vae/main.py)
-    def __init__(self, config):
+    def __init__(self, ncap, condition_dim):
         super(CA_NET, self).__init__()
-        self.config = config
-        self.t_dim = self.config.ncap
-        self.c_dim = self.config.condition_dim
+        self.t_dim = ncap
+        self.c_dim = condition_dim
         self.fc = nn.Linear(self.t_dim, self.c_dim * 2, bias=True)
         self.relu = nn.ReLU()
+        if torch.cuda.is_available():
+            self.use_cuda = True
+            torch.set_default_tensor_type('torch.cuda.FloatTensor')
+        else:
+            self.use_cuda = False
+            torch.set_default_tensor_type('torch.FloatTensor')
 
     def encode(self, text_embedding):
         x = self.relu(self.fc(text_embedding))
@@ -81,7 +86,7 @@ class CA_NET(nn.Module):
 
     def reparametrize(self, mu, logvar):
         std = logvar.mul(0.5).exp_()
-        if self.config.CUDA:
+        if self.use_cuda:
             eps = torch.cuda.FloatTensor(std.size()).normal_()
         else:
             eps = torch.FloatTensor(std.size()).normal_()
@@ -92,6 +97,7 @@ class CA_NET(nn.Module):
         mu, logvar = self.encode(text_embedding)
         c_code = self.reparametrize(mu, logvar)
         return c_code, mu, logvar
+
 
 class Generator(nn.Module):
     def __init__(self, config, use_captions=False):
@@ -108,7 +114,9 @@ class Generator(nn.Module):
         self.ngf = config.ngf
         self.use_captions = use_captions
         if self.use_captions:
-            self.ca_net = CA_NET(self.config)
+            self.ncap = self.config.ncap
+            self.condition_dim = self.config.condition_dim
+            self.ca_net = CA_NET(self.ncap, self.condition_dim)
 
         self.layer_name = None
         self.module_names = []
@@ -122,7 +130,7 @@ class Generator(nn.Module):
         if not self.use_captions:
             layers = deconv(layers, self.nz, ndim, 4, 1, 3, self.flag_leaky, self.flag_bn, self.flag_wn, self.flag_pixelwise)
         else:
-            layers = deconv(layers, self.nz + self.ncap, ndim, 4, 1, 3, self.flag_leaky, self.flag_bn, self.flag_wn, self.flag_pixelwise)
+            layers = deconv(layers, self.nz + self.condition_dim, ndim, 4, 1, 3, self.flag_leaky, self.flag_bn, self.flag_wn, self.flag_pixelwise)
         layers = deconv(layers, ndim, ndim, 3, 1, 1, self.flag_leaky, self.flag_bn, self.flag_wn, self.flag_pixelwise)
         return  nn.Sequential(*layers), ndim
 

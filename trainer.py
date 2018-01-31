@@ -57,6 +57,9 @@ class trainer:
         print(self.G.model)
         print ('Discriminator structure: ')
         print(self.D.model)
+
+        # change this to adjust WGAN-GP 
+
         self.mse = torch.nn.MSELoss()
         if self.use_cuda:
             self.mse = self.mse.cuda()
@@ -71,7 +74,6 @@ class trainer:
                 self.G = torch.nn.DataParallel(self.G, device_ids=gpus).cuda()
                 self.D = torch.nn.DataParallel(self.D, device_ids=gpus).cuda()  
 
-        
         # define tensors, ship model to cuda, and get dataloader.
         self.renew_everything()
         
@@ -381,13 +383,16 @@ class trainer:
                     print('[snapshot] model saved @ {}'.format(path))
 
 
-## perform training.
-print '----------------- configuration -----------------'
-for k, v in vars(config).items():
-    print('  {}: {}').format(k, v)
-print '-------------------------------------------------'
-torch.backends.cudnn.benchmark = True           # boost speed.
-trainer = trainer(config)
-trainer.train()
+def main():
+    ## perform training.
+    print('----------------- configuration -----------------')
+    for k, v in vars(config).items():
+        print('  {}: {}').format(k, v)
+    print('-------------------------------------------------')
+    torch.backends.cudnn.benchmark = True           # boost speed.
+    trainer = trainer(config)
+    trainer.train()
 
 
+if __name__=="__main__":
+    main()

@@ -62,12 +62,9 @@ class dataloader:
 
         self.batchsize = int(self.batch_table[pow(2,resl)])
         self.imsize = int(pow(2,resl))
-        self.dataset = ImageFolder(
-                    root=self.root,
-                    transform=transforms.Compose(   [
-                                                    transforms.Scale(size=(self.imsize,self.imsize), interpolation=Image.NEAREST),
-                                                    transforms.ToTensor(),
-                                                    ]))       
+        self.dataset = ImageFolder(root=self.root,
+            transform=transforms.Compose([transforms.Scale(size=(self.imsize,self.imsize), interpolation=Image.NEAREST),
+            transforms.ToTensor(),]))       
 
         self.dataloader = DataLoader(
             dataset=self.dataset,
@@ -111,14 +108,11 @@ class hdf5_dataloader:
         images = h5_data['/data{0}x{0}'.format(self.imsize)][:]
         h5_data.close()
 
-	self.dataset = ImageCaptionDataset(images, captions,
-                                           transform=ZeroToOneTensor())
-        self.dataloader = DataLoader(
-            dataset=self.dataset,
-            batch_size=self.batchsize,
-            shuffle=True,
-            num_workers=self.num_workers
-        )
+        self.dataset = ImageCaptionDataset(images, captions, transform=ZeroToOneTensor())
+
+        self.dataloader = DataLoader(dataset=self.dataset, batch_size=self.batchsize,
+                                    shuffle=True,
+                                    num_workers=self.num_workers)
 
     def __iter__(self):
         return iter(self.dataloader)

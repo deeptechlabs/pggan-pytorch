@@ -225,12 +225,16 @@ class Generator(nn.Module):
         print('freeze pretrained weights ... ')
         for param in self.model.parameters():
             param.requires_grad = False
+
     def forward(self, x, captions=None):
         if self.use_captions:
             c_code, mu, logvar = self.ca_net(captions)
             x = torch.cat((x, c_code), -1)
         x = self.model(x.view(x.size(0), -1, 1, 1))
-        return x
+        if self.use_captions:
+            return x, c_code
+        else:
+            return x
 
 class Discriminator(nn.Module):
     def __init__(self, config, use_captions=False):
@@ -247,6 +251,7 @@ class Discriminator(nn.Module):
         self.use_captions = use_captions
         if self.use_captions:
             self.ncap = config.ncap
+            self.condition_dim = self.config.condition_dim
         self.layer_name = None
         self.module_names = []
         if not self.use_captions:
@@ -263,7 +268,7 @@ class Discriminator(nn.Module):
         if not self.use_captions:
             layers = conv(layers, ndim, ndim, 4, 1, 0, self.flag_leaky, self.flag_bn, self.flag_wn, pixel=False)
         else:
-            layers = conv(layers, ndim + self.ncap, ndim, 4, 1, 0, self.flag_leaky, self.flag_bn, self.flag_wn, pixel=False)
+            layers = conv(layers, ndim + self.condition_dim, ndim, 4, 1, 0, self.flag_leaky, self.flag_bn, self.flag_wn, pixel=False)
         layers = linear(layers, ndim, 1, sig=self.flag_sigmoid, wn=self.flag_wn)
         if not self.use_captions:
             return nn.Sequential(*layers), ndim

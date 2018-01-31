@@ -755,7 +755,7 @@ def execute_cmdline(argv):
     p.add_argument(     'h5_filename',      help='HDF5 file to create')
     p.add_argument(     'data_dir',         help='Directory to read data from')
     p.add_argument(     '--resolution',     help='Output resolution (default: 256)', type=int, default=256)
-    p.add_argument(     '--export_captions', help='Export captions to HDF5 (default: False)', type=bool, default=False)
+    p.add_argument(     '--export_captions', help='Export captions to HDF5 (default: False)', type=bool, default=True)
 
     args = parser.parse_args(argv[1:])
     func = globals()[args.command]

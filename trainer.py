@@ -47,6 +47,7 @@ class trainer:
         self.flag_add_noise = self.config.flag_add_noise
         self.flag_add_drift = self.config.flag_add_drift
         self.use_captions = config.use_captions
+        self.gan_type = config.gan_type
         if self.use_captions:
             self.ncap = config.ncap
         
@@ -58,16 +59,20 @@ class trainer:
         print ('Discriminator structure: ')
         print(self.D.model)
 
-        # change this to adjust WGAN-GP 
+        if self.gan_type == 'lsgan':
+            self.mse = torch.nn.MSELoss()
 
-        self.mse = torch.nn.MSELoss()
         if self.use_cuda:
-            self.mse = self.mse.cuda()
+            if self.gan_type == 'lsgan':
+                self.mse = self.mse.cuda()
             torch.cuda.manual_seed(config.random_seed)
+
             if config.n_gpu==1:
+                # if only on single GPU
                 self.G = torch.nn.DataParallel(self.G).cuda(device=0)
                 self.D = torch.nn.DataParallel(self.D).cuda(device=0)
             else:
+                # if more we're doing multiple GPUs
                 gpus = []
                 for i  in range(config.n_gpu):
                     gpus.append(i)
@@ -298,14 +303,38 @@ class trainer:
                     self.x_tilde = self.G(self.z)
                 else:
                     self.x_tilde = self.G(self.z, self.caps)
-               
                 if not self.use_captions:
                     self.fx = self.D(self.x)
                     self.fx_tilde = self.D(self.x_tilde.detach())
                 else:
                     self.fx = self.D(self.x, self.caps)
                     self.fx_tilde = self.D(self.x_tilde.detach(), self.caps)
-                loss_d = self.mse(self.fx, self.real_label) + self.mse(self.fx_tilde, self.fake_label)
+
+                if self.gan_type == 'lsgan':
+                    loss_d = self.mse(self.fx, self.real_label) + self.mse(self.fx_tilde, self.fake_label)
+                elif self.gan_type == 'wgan-gp':
+                    D_real_loss = -torch.mean(self.fx_tilde)
+                    D_fake_loss = torch.mean(self.x_tilde)
+
+                    if self.use_cuda:
+                        alpha = torch.rand(self.x.size().cuda())
+                    else:
+                        alpha = torch.rand(self.x.size())
+
+                    x_hat = Variable(alpha * self.x.data + (1- alpha) * self.G.data, requires_grad=True)
+
+                    pred_hat = self.D(x_hat)
+
+                    if self.use_cuda:
+                        gradients = grad(outputs=pred_hat, inputs=x_hat, grad_outputs=torch.ones(pred_hat.size()).cuda(),
+                                     create_graph=True, retain_graph=True, only_inputs=True)[0]
+                    else:
+                        gradients = grad(outputs=pred_hat, inputs=x_hat, grad_outputs=torch.ones(pred_hat.size()),
+                                         create_graph=True, retain_graph=True, only_inputs=True)[0]
+
+                    gradient_penalty = self.lambda_ * ((gradients.view(gradients.size()[0], -1).norm(2, 1) - 1) ** 2).mean()
+
+                    loss_d = D_real_loss + D_fake_loss + gradient_penalty
 
                 loss_d.backward()
                 self.opt_d.step()
@@ -315,7 +344,12 @@ class trainer:
                     fx_tilde = self.D(self.x_tilde)
                 else:
                     fx_tilde = self.D(self.x_tilde, self.caps)
-                loss_g = self.mse(fx_tilde, self.real_label.detach())
+
+                if self.gan_type == 'lsgan':
+                    loss_g = self.mse(fx_tilde, self.real_label.detach())
+                elif self.gan_type == 'wgan-gp':
+                    loss_g = -torch.mean(fx_tilde)
+
                 loss_g.backward()
                 self.opt_g.step()
 
@@ -386,11 +420,16 @@ class trainer:
                     print('[snapshot] model saved @ {}'.format(path))
 
 
-## perform training.
-print('----------------- configuration -----------------')
-for k, v in vars(config).items():
-    print('  {}: {}'.format(k, v))
-print('-------------------------------------------------')
-torch.backends.cudnn.benchmark = True           # boost speed.
-trainer = trainer(config)
-trainer.train()
+def main():
+    ## perform training.
+    print('----------------- configuration -----------------')
+    for k, v in vars(config).items():
+        print('  {}: {}'.format(k, v))
+    print('-------------------------------------------------')
+    torch.backends.cudnn.benchmark = True           # boost speed.
+    model = trainer(config)
+    model.train()
+
+
+if __name__=="__main__":
+    main()

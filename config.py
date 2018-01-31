@@ -13,6 +13,7 @@ parser.add_argument('--n_gpu', type=int, default=1)             # for Multi-GPU 
 ## caption parameters.
 parser.add_argument('--use_captions', type=bool, default=False)
 parser.add_argument('--ncap', type=int, default=1024)           # input dimension of captions.
+parser.add_argument('--condition_dim', type=int, default=128)   # caption embedding dim post-conditioning
 
 
 

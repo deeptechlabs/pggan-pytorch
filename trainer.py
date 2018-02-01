@@ -13,6 +13,13 @@ import utils as utils
 import numpy as np
 
 
+def KL_loss(mu, logvar):
+    # -0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
+    KLD_element = mu.pow(2).add_(logvar.exp()).mul_(-1).add_(1).add_(logvar)
+    KLD = torch.mean(KLD_element).mul_(-0.5)
+    return KLD
+
+
 class trainer:
     def __init__(self, config):
         self.config = config
@@ -297,7 +304,7 @@ class trainer:
                 if not self.use_captions:
                     self.x_tilde = self.G(self.z)
                 else:
-                    self.x_tilde, ca_emb = self.G(self.z, self.caps)
+                    self.x_tilde, ca_emb, mu, logvar = self.G(self.z, self.caps)
                
                 if not self.use_captions:
                     self.fx = self.D(self.x)
@@ -316,11 +323,12 @@ class trainer:
                 else:
                     fx_tilde = self.D(self.x_tilde, ca_emb.detach())
                 loss_g = self.mse(fx_tilde, self.real_label.detach())
-                loss_g.backward()
+                loss_g_total = loss_g + KL_loss(mu, logvar) * self.config.kl_coeff
+                loss_g_total.backward()
                 self.opt_g.step()
 
                 # logging.
-                log_msg = ' [E:{0}][T:{1}][{2:6}/{3:6}]  errD: {4:.4f} | errG: {5:.4f} | [lr:{11:.5f}][cur:{6:.3f}][resl:{7:4}][{8}][{9:.1f}%][{10:.1f}%]'.format(self.epoch, self.globalTick, self.stack, len(self.loader.dataset), loss_d.data[0], loss_g.data[0], self.resl, int(pow(2,floor(self.resl))), self.phase, self.complete['gen'], self.complete['dis'], self.lr)
+                log_msg = ' [E:{0}][T:{1}][{2:6}/{3:6}]  errD: {4:.4f} | errG: {5:.4f} | errKL: {12:.4f} | [lr:{11:.5f}][cur:{6:.3f}][resl:{7:4}][{8}][{9:.1f}%][{10:.1f}%]'.format(self.epoch, self.globalTick, self.stack, len(self.loader.dataset), loss_d.data[0], loss_g.data[0], self.resl, int(pow(2,floor(self.resl))), self.phase, self.complete['gen'], self.complete['dis'], self.lr, loss_g_total.data[0]-loss_g.data[0])
                 tqdm.write(log_msg)
 
                 # save model.
@@ -331,7 +339,7 @@ class trainer:
                     if not self.use_captions:
                         x_test = self.G(self.z_test)
                     else:
-                        x_test, _ = self.G(self.z_test, self.caps_test)
+                        x_test, _, _, _ = self.G(self.z_test, self.caps_test)
                     os.system('mkdir -p repo/save/grid')
                     utils.save_image_grid(x_test.data, 'repo/save/grid/{}_{}_G{}_D{}.jpg'.format(int(self.globalIter/self.config.save_img_every), self.phase, self.complete['gen'], self.complete['dis']))
                     os.system('mkdir -p repo/save/resl_{}'.format(int(floor(self.resl))))
@@ -343,7 +351,7 @@ class trainer:
                     if not self.use_captions:
                         x_test = self.G(self.z_test)
                     else:
-                        x_test, _ = self.G(self.z_test, self.caps_test)
+                        x_test, _, _, _ = self.G(self.z_test, self.caps_test)
                     self.tb.add_scalar('data/loss_g', loss_g.data[0], self.globalIter)
                     self.tb.add_scalar('data/loss_d', loss_d.data[0], self.globalIter)
                     self.tb.add_scalar('tick/lr', self.lr, self.globalIter)

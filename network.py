@@ -232,7 +232,7 @@ class Generator(nn.Module):
             x = torch.cat((x, c_code), -1)
         x = self.model(x.view(x.size(0), -1, 1, 1))
         if self.use_captions:
-            return x, c_code
+            return x, c_code, mu, logvar
         else:
             return x
 

@@ -52,7 +52,7 @@ class ImageCaptionDataset(Dataset):
 class dataloader:
     def __init__(self, config):
         self.root = config.train_data_root
-        self.batch_table = {4:256, 8:256, 16:256, 32:128, 64:128, 128:64, 256:64} # change this according to available gpu memory.
+        self.batch_table = {4:256, 8:256, 16:256, 32:128, 64:32, 128:16, 256:4} # change this according to available gpu memory.
         self.batchsize = int(self.batch_table[pow(2,2)])        # we start from 2^2=4
         self.imsize = int(pow(2,2))
         self.num_workers = 4
@@ -90,7 +90,7 @@ class dataloader:
 class hdf5_dataloader:
     def __init__(self, config):
         self.h5_file = config.train_data_h5
-        self.batch_table = {4:256, 8:256, 16:256, 32:128, 64:128, 128:64, 256:64}
+        self.batch_table = {4:256, 8:256, 16:256, 32:128, 64:32, 128:16, 256:4}
         self.batchsize = int(self.batch_table[pow(2,2)])
         self.imsize = int(pow(2,2))
         self.num_workers = 4

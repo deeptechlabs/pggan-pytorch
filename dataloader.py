@@ -84,7 +84,7 @@ class dataloader:
 
     def get_batch(self):
         dataIter = iter(self.dataloader)
-        return next(dataIter)[0].mul(2).add(-1)         # pixel range [-1, 1]
+        return next(dataIter)[0].mul(2).add(-1), -1         # pixel range [-1, 1]
 
 
 class hdf5_dataloader:

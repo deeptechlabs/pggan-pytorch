@@ -11,6 +11,51 @@ from tqdm import tqdm
 import tf_recorder as tensorboard
 import utils as utils
 import numpy as np
+import PIL.Image
+
+
+def adjust_dynamic_range(data, drange_in, drange_out):
+    if drange_in != drange_out:
+        scale = (np.float32(drange_out[1]) - np.float32(drange_out[0])) / (np.float32(drange_in[1]) - np.float32(drange_in[0]))
+        bias = (np.float32(drange_out[0]) - np.float32(drange_in[0]) * scale)
+        data = data * scale + bias
+    return data
+
+
+def create_image_grid(images, grid_size=None):
+    assert images.ndim == 3 or images.ndim == 4
+    num, img_w, img_h = images.shape[0], images.shape[-1], images.shape[-2]
+
+    if grid_size is not None:
+        grid_w, grid_h = tuple(grid_size)
+    else:
+        grid_w = max(int(np.ceil(np.sqrt(num))), 1)
+        grid_h = max((num - 1) / grid_w + 1, 1)
+
+    grid = np.zeros(list(images.shape[1:-2]) + [grid_h * img_h, grid_w * img_w], dtype=images.dtype)
+    for idx in xrange(num):
+        x = (idx % grid_w) * img_w
+        y = (idx / grid_w) * img_h
+        grid[..., y : y + img_h, x : x + img_w] = images[idx]
+    return grid
+
+
+def convert_to_pil_image(image, drange=[0,1]):
+    assert image.ndim == 2 or image.ndim == 3
+    if image.ndim == 3:
+        if image.shape[0] == 1:
+            image = image[0] # grayscale CHW => HW
+        else:
+            image = image.transpose(1, 2, 0) # CHW -> HWC
+
+    image = adjust_dynamic_range(image, drange, [0,255])
+    image = np.round(image).clip(0, 255).astype(np.uint8)
+    format = 'RGB' if image.ndim == 3 else 'L'
+    return PIL.Image.fromarray(image, format)
+
+
+def save_image_grid(images, filename, drange=[0, 1], grid_size=None):
+    convert_to_pil_image(create_image_grid(images, grid_size), drange).save(filename)
 
 
 def KL_loss(mu, logvar):
@@ -256,6 +301,8 @@ class trainer:
 
 
     def train(self):
+        # resolutions for which ground truth images have been saved
+        resl_reals_saved = []
         # noise for test.
         self.z_test = torch.FloatTensor(self.loader.batchsize / 4, self.nz)
         if self.use_cuda:
@@ -336,6 +383,14 @@ class trainer:
 
                 # save model.
                 self.snapshot('repo/model')
+
+                # save ground truth image grid if not done before for current resolution.
+                curr_resl = int(pow(2,floor(self.resl)))
+                if curr_resl not in resl_reals_saved:
+                    resl_reals_saved.append(curr_resl)
+                    os.system('mkdir -p repo/save/grid_real')
+                    assert self.x.size()[0] >= 16  # need to reduce #real_images_saved if this fails
+                    save_image_grid(self.x.data.cpu().numpy()[:16], os.path.join('repo/save/grid_real', 'real-{0}x{0}.png'.format(curr_resl)), drange=[-1, 1], grid_size=(4, 4))
 
                 # save image grid.
                 if self.globalIter%self.config.save_img_every == 0:

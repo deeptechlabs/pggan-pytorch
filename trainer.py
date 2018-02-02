@@ -323,7 +323,10 @@ class trainer:
                 else:
                     fx_tilde = self.D(self.x_tilde, ca_emb.detach())
                 loss_g = self.mse(fx_tilde, self.real_label.detach())
-                loss_g_total = loss_g + KL_loss(mu, logvar) * self.config.kl_coeff
+                if self.use_captions:
+                    loss_g_total = loss_g + KL_loss(mu, logvar) * self.config.kl_coeff
+                else:
+                    loss_g_total = loss_g
                 loss_g_total.backward()
                 self.opt_g.step()
 

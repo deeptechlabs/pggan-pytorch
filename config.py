@@ -6,7 +6,7 @@ import time
 parser = argparse.ArgumentParser('PGGAN')
 
 ## general settings.
-parser.add_argument('--train_data_h5', type=str, default='/home/shsh/pggan-pytorch/data/coco/coco-train-images-captions.h5')
+parser.add_argument('--train_data_h5', type=str, default='/data/milatmp1/suhubdyd/datasets/coco/coco-captions.h5')
 parser.add_argument('--random_seed', type=int, default=int(time.time()))
 parser.add_argument('--n_gpu', type=int, default=1)             # for Multi-GPU training.
 
@@ -14,7 +14,7 @@ parser.add_argument('--n_gpu', type=int, default=1)             # for Multi-GPU 
 parser.add_argument('--use_captions', type=bool, default=False)
 parser.add_argument('--ncap', type=int, default=1024)           # input dimension of captions.
 parser.add_argument('--condition_dim', type=int, default=128)   # caption embedding dim post-conditioning
-
+parser.add_argument('--gan_type', type=str, default='wgan-gp', choices=['lsgan', 'wgan-gp'])
 
 
 ## training parameters.
@@ -30,7 +30,7 @@ parser.add_argument('--TICK', type=int, default=1000)           # 1 tick = 1000 
 parser.add_argument('--max_resl', type=int, default=8)          # 10-->1024, 9-->512, 8-->256
 parser.add_argument('--trns_tick', type=int, default=200)       # transition tick
 parser.add_argument('--stab_tick', type=int, default=100)       # stabilization tick
-
+parser.add_argument('--lambda', type=float, default=100.0)      # Wassertein Gradient Clipping
 
 ## network structure.
 parser.add_argument('--flag_wn', type=bool, default=True)           # use of equalized-learning rate.

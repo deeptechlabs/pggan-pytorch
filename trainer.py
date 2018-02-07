@@ -48,6 +48,8 @@ class trainer:
         self.flag_add_drift = self.config.flag_add_drift
         self.use_captions = config.use_captions
         self.gan_type = config.gan_type
+        self.lambda = config.lambda
+
         if self.use_captions:
             self.ncap = config.ncap
         
@@ -283,7 +285,6 @@ class trainer:
                 self.G.zero_grad()
                 self.D.zero_grad()
 
-                # TODO implement WGAN-GP
                 # update discriminator.
                 if self.use_captions:
                     batch_imgs, batch_caps = self.loader.get_batch()
@@ -332,7 +333,7 @@ class trainer:
                         gradients = grad(outputs=pred_hat, inputs=x_hat, grad_outputs=torch.ones(pred_hat.size()),
                                          create_graph=True, retain_graph=True, only_inputs=True)[0]
 
-                    gradient_penalty = self.lambda_ * ((gradients.view(gradients.size()[0], -1).norm(2, 1) - 1) ** 2).mean()
+                    gradient_penalty = self.lambda * ((gradients.view(gradients.size()[0], -1).norm(2, 1) - 1) ** 2).mean()
 
                     loss_d = D_real_loss + D_fake_loss + gradient_penalty
 

@@ -30,7 +30,7 @@ parser.add_argument('--TICK', type=int, default=1000)           # 1 tick = 1000 
 parser.add_argument('--max_resl', type=int, default=8)          # 10-->1024, 9-->512, 8-->256
 parser.add_argument('--trns_tick', type=int, default=200)       # transition tick
 parser.add_argument('--stab_tick', type=int, default=100)       # stabilization tick
-
+parser.add_argument('--lambda', type=float, default=100.0)      # Wassertein Gradient Clipping
 
 ## network structure.
 parser.add_argument('--flag_wn', type=bool, default=True)           # use of equalized-learning rate.
